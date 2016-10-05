@@ -1,6 +1,8 @@
 package com.epam.bigdata2016;
 
 import com.epam.bigdata2016.model.LogLine;
+import com.restfb.*;
+import com.restfb.types.Event;
 import org.apache.spark.api.java.*;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.Dataset;
@@ -13,9 +15,13 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 
 public class Main {
+    private static final String FACEBOOK_TOKEN = "EAAbZB8vQ692kBAKKbb9buNhrTUEg69kXZBd8ZCzZAlU9k3f3y80ZAzFmDzci1UVIEGoZBCViXScfz5ccS3VGdb3XlEZClE8lldXMSc1IjIxQjEbQVTxdnZBdbkrrtRMdYy1ZAagQsx2RDZC37M5wiEN7Uz2lIxOl5uNwbCIqe3ytvbcQZDZD";
+    private static final FacebookClient facebookClient = new DefaultFacebookClient(FACEBOOK_TOKEN, Version.VERSION_2_5);
+
     public static void main(String[] args) {
         String filePath = args[0];
         String resultPath = args[1];
@@ -43,6 +49,7 @@ public class Main {
                             Tuple2<Long, String> key = new Tuple2<>(logLine.getCityId(), logLine.getTimestamp());
                             return new Tuple2<>(key, tags.get(logLine.getTagsId()));
                         })
+                        .filter(pair -> pair._2() != null)
                         .aggregateByKey(new HashSet<String>(),
                                 (set, tagsArr) -> {
                                     set.addAll(Arrays.asList(tagsArr));
@@ -53,7 +60,18 @@ public class Main {
                                     return set1;
                                 }
                         );
-        logs.foreach(line -> System.out.println(line._1()._1() + " " +  line._1()._2() + " " + line._2()));
+        spark.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/tags.txt")
+                .javaRDD()
+                .map(line -> line.split("\\t"))
+                .map(arr -> arr[1].split(","))
+                .flatMap(arr->Arrays.asList(arr).iterator())
+                .distinct();
+
+        logs.foreach(line -> System.out.println(
+                line._1()._1() + " " +
+                        line._1()._2() + " " +
+                        line._2())
+        );
 
     }
 }

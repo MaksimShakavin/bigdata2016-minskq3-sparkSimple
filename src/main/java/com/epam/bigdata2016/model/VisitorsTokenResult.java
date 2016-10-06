@@ -1,10 +1,11 @@
 package com.epam.bigdata2016.model;
 
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-public class VisitorsTokenResult {
+public class VisitorsTokenResult implements Serializable {
     private long totalAmountVisitors;
     private Map<String,Long> tokenMap;
 

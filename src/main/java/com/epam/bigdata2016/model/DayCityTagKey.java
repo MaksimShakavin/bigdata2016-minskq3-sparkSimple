@@ -1,6 +1,8 @@
 package com.epam.bigdata2016.model;
 
-public class DayCityTagKey {
+import java.io.Serializable;
+
+public class DayCityTagKey implements Serializable{
     private String day;
     private String city;
     private String tag;

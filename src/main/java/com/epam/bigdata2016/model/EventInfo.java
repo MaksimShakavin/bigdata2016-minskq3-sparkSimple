@@ -1,7 +1,9 @@
 package com.epam.bigdata2016.model;
 
 
-public class EventInfo {
+import java.io.Serializable;
+
+public class EventInfo implements Serializable {
     private String id;
     private String name;
     private String description;

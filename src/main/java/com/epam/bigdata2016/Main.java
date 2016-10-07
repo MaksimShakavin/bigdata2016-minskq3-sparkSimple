@@ -7,9 +7,7 @@ import com.restfb.types.Location;
 import com.restfb.types.Place;
 import com.restfb.types.User;
 import org.apache.spark.api.java.*;
-import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.*;
-import org.apache.spark.util.LongAccumulator;
 import scala.Tuple2;
 
 import java.text.SimpleDateFormat;
@@ -27,18 +25,20 @@ public class Main {
     public static void main(String[] args) {
         String filePath = args[0];
         String resultPath = args[1];
+        String tagsFilePath = args[2];
+        String citiesFilePath = args[3];
 
         SparkSession spark = SparkSession
                 .builder()
                 .appName("JavaWordCount")
                 .getOrCreate();
 
-        DictionaryUtils dict = new DictionaryUtils(spark);
+        DictionaryUtils dict = new DictionaryUtils(spark,tagsFilePath,citiesFilePath);
         Map<String, String[]> tags = dict.loadTags().collectAsMap();
         Map<String, String> cities = dict.loadCities().collectAsMap();
 
-
-        JavaPairRDD<Tuple2<String, String>, HashSet<String>> logs =
+        //Collecting all unique keyword per day per location
+        JavaPairRDD<Tuple2<String, String>, String> logs =
                 spark.read().textFile(filePath)
                         .javaRDD()
                         .map(line -> line.split("\\t"))
@@ -63,13 +63,14 @@ public class Main {
                                     set1.addAll(set2);
                                     return set1;
                                 }
-                        );
+                        )
+                        .flatMapValues(set -> set);
 
         logs.saveAsTextFile(resultPath+"/result/tagsResult");
 
         //Collecting all events per key:  (day,city,tag) -> eventInfo
         JavaPairRDD<DayCityTagKey, EventInfo> keyEvent =
-                spark.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/tags.txt")
+                spark.read().textFile(tagsFilePath)
                         //Collect all unique tags
                         .javaRDD()
                         .map(line -> line.split("\\t"))

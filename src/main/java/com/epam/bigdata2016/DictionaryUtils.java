@@ -8,13 +8,17 @@ import scala.Tuple2;
 public class DictionaryUtils {
 
     private SparkSession sc;
+    private String tagsFile;
+    private String citiesFile;
 
-    public DictionaryUtils(SparkSession sc) {
+    public DictionaryUtils(SparkSession sc, String tagsFile, String citiesFile) {
         this.sc = sc;
+        this.tagsFile = tagsFile;
+        this.citiesFile = citiesFile;
     }
 
     public JavaPairRDD<String, String[]> loadTags() {
-        return sc.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/tags.txt")
+        return sc.read().textFile(tagsFile)
                 .javaRDD()
                 .map(line -> line.split("\\t"))
                 .mapToPair(arr -> {
@@ -25,7 +29,7 @@ public class DictionaryUtils {
     }
 
     public JavaPairRDD<String, String> loadCities() {
-        return sc.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/cities.txt").javaRDD()
+        return sc.read().textFile(citiesFile).javaRDD()
                 .map(line -> line.split("\\t"))
                 .mapToPair(arr -> new Tuple2<>(arr[0], arr[1]));
     }

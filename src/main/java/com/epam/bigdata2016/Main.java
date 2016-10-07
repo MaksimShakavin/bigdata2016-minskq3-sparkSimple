@@ -1,19 +1,14 @@
 package com.epam.bigdata2016;
 
-import com.epam.bigdata2016.model.DayCityTagKey;
-import com.epam.bigdata2016.model.EventInfo;
-import com.epam.bigdata2016.model.LogLine;
-import com.epam.bigdata2016.model.VisitorsTokenResult;
+import com.epam.bigdata2016.model.*;
 import com.restfb.*;
 import com.restfb.types.Event;
 import com.restfb.types.Location;
 import com.restfb.types.Place;
+import com.restfb.types.User;
 import org.apache.spark.api.java.*;
 import org.apache.spark.api.java.function.MapFunction;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Encoder;
-import org.apache.spark.sql.Encoders;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.*;
 import org.apache.spark.util.LongAccumulator;
 import scala.Tuple2;
 
@@ -25,7 +20,7 @@ import java.util.stream.StreamSupport;
 
 
 public class Main {
-    private static final String FACEBOOK_TOKEN = "EAAbZB8vQ692kBAKKbb9buNhrTUEg69kXZBd8ZCzZAlU9k3f3y80ZAzFmDzci1UVIEGoZBCViXScfz5ccS3VGdb3XlEZClE8lldXMSc1IjIxQjEbQVTxdnZBdbkrrtRMdYy1ZAagQsx2RDZC37M5wiEN7Uz2lIxOl5uNwbCIqe3ytvbcQZDZD";
+    private static final String FACEBOOK_TOKEN = "EAACEdEose0cBABZAGyJBahZCn24r8r2utLI7uNnFT82Ju53IuooLObVEcW9gtgPPfgIMf8c7hDihQTJeFK9RtnN41KceaMD7aUeFDNckzpisxXBRfPIF6BkuDDNZBk5OHZCppdTqWSSrZArYYGwH16ZALL0CLWLGHpLevAfqsEQAZDZD";
     private static final FacebookClient facebookClient = new DefaultFacebookClient(FACEBOOK_TOKEN, Version.VERSION_2_5);
     private static final SimpleDateFormat dt = new SimpleDateFormat("yyyy-mm-dd");
 
@@ -44,33 +39,33 @@ public class Main {
         LongAccumulator fb = spark.sparkContext().longAccumulator("processed");
 
 
-//        JavaPairRDD<Tuple2<Long, String>, HashSet<String>> logs =
-//                spark.read().textFile(filePath)
-//                        .javaRDD()
-//                        .map(line -> line.split("\\t"))
-//                        .map(arr -> {
-//                            String tagid = arr[20];
-//                            String timestamp = arr[1].substring(0, 8);
-//                            Long cityId = Long.valueOf(arr[6]);
-//                            return new LogLine(cityId, timestamp, tagid);
-//                        })
-//                        .mapToPair(logLine -> {
-//                            Tuple2<Long, String> key = new Tuple2<>(logLine.getCityId(), logLine.getTimestamp());
-//                            return new Tuple2<>(key, tags.get(logLine.getTagsId()));
-//                        })
-//                        .filter(pair -> pair._2() != null)
-//                        .aggregateByKey(new HashSet<String>(),
-//                                (set, tagsArr) -> {
-//                                    set.addAll(Arrays.asList(tagsArr));
-//                                    return set;
-//                                },
-//                                (set1, set2) -> {
-//                                    set1.addAll(set2);
-//                                    return set1;
-//                                }
-//                        );
+        JavaPairRDD<Tuple2<Long, String>, HashSet<String>> logs =
+                spark.read().textFile(filePath)
+                        .javaRDD()
+                        .map(line -> line.split("\\t"))
+                        .map(arr -> {
+                            String tagid = arr[20];
+                            String timestamp = arr[1].substring(0, 8);
+                            Long cityId = Long.valueOf(arr[6]);
+                            return new LogLine(cityId, timestamp, tagid);
+                        })
+                        .mapToPair(logLine -> {
+                            Tuple2<Long, String> key = new Tuple2<>(logLine.getCityId(), logLine.getTimestamp());
+                            return new Tuple2<>(key, tags.get(logLine.getTagsId()));
+                        })
+                        .filter(pair -> pair._2() != null)
+                        .aggregateByKey(new HashSet<String>(),
+                                (set, tagsArr) -> {
+                                    set.addAll(Arrays.asList(tagsArr));
+                                    return set;
+                                },
+                                (set1, set2) -> {
+                                    set1.addAll(set2);
+                                    return set1;
+                                }
+                        );
 
-        //Collecting all events per tag
+        //Collecting all events per key:  (day,city,tag) -> eventInfo
         JavaPairRDD<DayCityTagKey, EventInfo> keyEvent =
                 spark.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/tags.txt")
                         //Collect all unique tags
@@ -81,6 +76,7 @@ public class Main {
                         .distinct()
                         //Fetch from fb from (tag) (day,city,tag) -> (attenders,description)
                         .flatMapToPair(tag -> {
+                            //for each tag get all events
                             Connection<Event> eventConnections = facebookClient.fetchConnection("search", Event.class,
                                     Parameter.with("q", tag),
                                     Parameter.with("type", "event"),
@@ -111,7 +107,7 @@ public class Main {
                         });
 
         //Aggregating all events to (tag,day,city) ->{ total_visitors, token_map}
-        JavaPairRDD<DayCityTagKey, Tuple2<Long,List<Tuple2<String, Long>>>> resultRdd =
+        JavaPairRDD<DayCityTagKey, Tuple2<Long, List<Tuple2<String, Long>>>> resultRdd =
                 // collecting (tag,day,city) -> { total_visitors, HashMap<word,amount>}
                 keyEvent.aggregateByKey(new VisitorsTokenResult(),
                         (result, eventInfo) -> {
@@ -136,22 +132,40 @@ public class Main {
                         })
                         // collecting (tag,day,city) -> { total_visitors, top 10 words}
                         .mapValues(result -> {
-                                    List<Tuple2<String,Long>>  resultMap =result.getTokenMap()
+                                    List<Tuple2<String, Long>> resultMap = result.getTokenMap()
                                             .entrySet()
                                             .stream()
                                             .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                                             .map(entry -> new Tuple2<>(entry.getKey(), entry.getValue()))
                                             .limit(10).collect(Collectors.toList());
-                                    return new Tuple2<>(result.getTotalAmountVisitors(),resultMap);
+                                    return new Tuple2<>(result.getTotalAmountVisitors(), resultMap);
 
                                 }
                         );
 
-
         resultRdd.foreach(pair -> {
-            fb.add(1L);
             System.out.println(pair._1() + ":" + pair._2());
         });
+
+        //Collect all attenders
+        JavaRDD<UserInfo> allAttenders = keyEvent.flatMap(pair -> {
+            Connection<User> attendesConncetions = facebookClient.fetchConnection(pair._2().getId() + "/attending", User.class, Parameter.with("limit", 1000));
+            return StreamSupport.stream(attendesConncetions.spliterator(), false)
+                    .flatMap(Collection::stream)
+                    .map(user -> new UserInfo(user.getId(), user.getName()))
+                    .iterator();
+        });
+
+        //Sort all attenders by ocurances
+        JavaPairRDD<Integer, UserInfo> userResultRdd =
+                allAttenders
+                        .mapToPair(user -> new Tuple2<>(user, 1))
+                        .reduceByKey((p1, p2) -> p1 + p2)
+                        .mapToPair(Tuple2::swap)
+                        .sortByKey((i1, i2) -> -Integer.compare(i1, i2));
+
+        userResultRdd.foreach(occUser -> System.out.println(occUser._2() + ":" + occUser._1()));
+
 
     }
 }

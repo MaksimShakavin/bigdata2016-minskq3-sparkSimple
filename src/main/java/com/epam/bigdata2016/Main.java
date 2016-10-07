@@ -157,12 +157,13 @@ public class Main {
         });
 
         //Sort all attenders by ocurances
-        JavaPairRDD<Integer, UserInfo> userResultRdd =
+        JavaPairRDD<UserInfo, Integer> userResultRdd =
                 allAttenders
                         .mapToPair(user -> new Tuple2<>(user, 1))
                         .reduceByKey((p1, p2) -> p1 + p2)
                         .mapToPair(Tuple2::swap)
-                        .sortByKey((i1, i2) -> -Integer.compare(i1, i2));
+                        .sortByKey((i1, i2) -> {return -Integer.compare(i1, i2);})
+                        .mapToPair(Tuple2::swap);
 
         userResultRdd.saveAsTextFile(resultPath+"/result/attenders");
     }

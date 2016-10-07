@@ -70,13 +70,16 @@ public class Main {
 //                                }
 //                        );
 
+        //Collecting all events per tag
         JavaPairRDD<DayCityTagKey, EventInfo> keyEvent =
                 spark.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/tags.txt")
+                        //Collect all unique tags
                         .javaRDD()
                         .map(line -> line.split("\\t"))
                         .map(arr -> arr[1].split(","))
                         .flatMap(arr -> Arrays.asList(arr).iterator())
                         .distinct()
+                        //Fetch from fb from (tag) (day,city,tag) -> (attenders,description)
                         .flatMapToPair(tag -> {
                             Connection<Event> eventConnections = facebookClient.fetchConnection("search", Event.class,
                                     Parameter.with("q", tag),
@@ -107,8 +110,9 @@ public class Main {
                                     .iterator();
                         });
 
-
-        JavaPairRDD<DayCityTagKey,List<Tuple2<String,Long>>> resultRdd =
+        //Aggregating all events to (tag,day,city) ->{ total_visitors, token_map}
+        JavaPairRDD<DayCityTagKey, Tuple2<Long,List<Tuple2<String, Long>>>> resultRdd =
+                // collecting (tag,day,city) -> { total_visitors, HashMap<word,amount>}
                 keyEvent.aggregateByKey(new VisitorsTokenResult(),
                         (result, eventInfo) -> {
                             result.setTotalAmountVisitors(result.getTotalAmountVisitors() + eventInfo.getAttendance());
@@ -127,18 +131,27 @@ public class Main {
                             result1.getTokenMap()
                                     .forEach((k, v) -> result2.getTokenMap()
                                             .merge(k, v, (oldVal, newVal) -> oldVal + newVal));
+                            result2.setTotalAmountVisitors(result2.getTotalAmountVisitors() + result1.getTotalAmountVisitors());
                             return result2;
                         })
-                        .mapValues(result -> result.getTokenMap()
-                                .entrySet()
-                                .stream()
-                                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                                .map(entry -> new Tuple2<>(entry.getKey(), entry.getValue()))
-                                .limit(10).collect(Collectors.toList())
+                        // collecting (tag,day,city) -> { total_visitors, top 10 words}
+                        .mapValues(result -> {
+                                    List<Tuple2<String,Long>>  resultMap =result.getTokenMap()
+                                            .entrySet()
+                                            .stream()
+                                            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                                            .map(entry -> new Tuple2<>(entry.getKey(), entry.getValue()))
+                                            .limit(10).collect(Collectors.toList());
+                                    return new Tuple2<>(result.getTotalAmountVisitors(),resultMap);
+
+                                }
                         );
 
 
-        resultRdd.foreach(pair ->{fb.add(1L); System.out.println(pair._1()+":" + pair._2());});
+        resultRdd.foreach(pair -> {
+            fb.add(1L);
+            System.out.println(pair._1() + ":" + pair._2());
+        });
 
     }
 }

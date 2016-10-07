@@ -29,5 +29,13 @@ public class VisitorsTokenResult implements Serializable {
     public void setTokenMap(Map<String, Long> tokenMap) {
         this.tokenMap = tokenMap;
     }
+
+    @Override
+    public String toString() {
+        return "{" +
+                "totalAmountVisitors=" + totalAmountVisitors +
+                ", token_Map=" + tokenMap +
+                '}';
+    }
 }
 

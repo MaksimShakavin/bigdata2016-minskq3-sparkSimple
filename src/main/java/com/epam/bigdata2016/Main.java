@@ -20,7 +20,7 @@ import java.util.stream.StreamSupport;
 
 
 public class Main {
-    private static final String FACEBOOK_TOKEN = "EAACEdEose0cBABZAGyJBahZCn24r8r2utLI7uNnFT82Ju53IuooLObVEcW9gtgPPfgIMf8c7hDihQTJeFK9RtnN41KceaMD7aUeFDNckzpisxXBRfPIF6BkuDDNZBk5OHZCppdTqWSSrZArYYGwH16ZALL0CLWLGHpLevAfqsEQAZDZD";
+    private static final String FACEBOOK_TOKEN = "EAACEdEose0cBAIDJYfIFhVXZCgdk34eZCyx35kGs02qWCZC6qZB4pRYdMYPMKukTHJVpldXldtnHhS4czIko4lISCFRh535DpYt5i70L2VbNBUVDDL9qhI3lDXAkZCvvN0gbxcXSVmMiYj9DP5QevbGRyInWIvy4S1PNNZA8BiJQZDZD";
     private static final FacebookClient facebookClient = new DefaultFacebookClient(FACEBOOK_TOKEN, Version.VERSION_2_5);
     private static final SimpleDateFormat dt = new SimpleDateFormat("yyyy-mm-dd");
 
@@ -65,7 +65,7 @@ public class Main {
                                 }
                         );
 
-        logs.saveAsTextFile(resultPath+"/result/tagsResult.txt");
+        logs.saveAsTextFile(resultPath+"/result/tagsResult");
 
         //Collecting all events per key:  (day,city,tag) -> eventInfo
         JavaPairRDD<DayCityTagKey, EventInfo> keyEvent =
@@ -145,7 +145,7 @@ public class Main {
                                 }
                         );
 
-        resultRdd.saveAsTextFile(resultPath+"/result/eventsResult.txt");
+        resultRdd.saveAsTextFile(resultPath+"/result/eventsResult");
 
         //Collect all attenders
         JavaRDD<UserInfo> allAttenders = keyEvent.flatMap(pair -> {
@@ -164,8 +164,6 @@ public class Main {
                         .mapToPair(Tuple2::swap)
                         .sortByKey((i1, i2) -> -Integer.compare(i1, i2));
 
-        userResultRdd.saveAsTextFile(resultPath+"/result/attenders.txt");
-
-
+        userResultRdd.saveAsTextFile(resultPath+"/result/attenders");
     }
 }

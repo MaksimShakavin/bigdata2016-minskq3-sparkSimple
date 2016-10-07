@@ -25,7 +25,7 @@ public class DictionaryUtils {
     }
 
     public JavaPairRDD<String, String> loadCities() {
-        return sc.read().textFile("hdfs://").javaRDD()
+        return sc.read().textFile("hdfs://sandbox.hortonworks.com:8020/tmp/dictionaries/cities.txt").javaRDD()
                 .map(line -> line.split("\\t"))
                 .mapToPair(arr -> new Tuple2<>(arr[0], arr[1]));
     }

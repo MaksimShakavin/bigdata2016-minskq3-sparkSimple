@@ -36,10 +36,9 @@ public class Main {
         DictionaryUtils dict = new DictionaryUtils(spark);
         Map<String, String[]> tags = dict.loadTags().collectAsMap();
         Map<String, String> cities = dict.loadCities().collectAsMap();
-        LongAccumulator fb = spark.sparkContext().longAccumulator("processed");
 
 
-        JavaPairRDD<Tuple2<Long, String>, HashSet<String>> logs =
+        JavaPairRDD<Tuple2<String, String>, HashSet<String>> logs =
                 spark.read().textFile(filePath)
                         .javaRDD()
                         .map(line -> line.split("\\t"))
@@ -50,7 +49,8 @@ public class Main {
                             return new LogLine(cityId, timestamp, tagid);
                         })
                         .mapToPair(logLine -> {
-                            Tuple2<Long, String> key = new Tuple2<>(logLine.getCityId(), logLine.getTimestamp());
+                            String city = cities.getOrDefault(logLine.getCityId(),"undefined");
+                            Tuple2<String, String> key = new Tuple2<>(city, logLine.getTimestamp());
                             return new Tuple2<>(key, tags.get(logLine.getTagsId()));
                         })
                         .filter(pair -> pair._2() != null)
@@ -64,6 +64,8 @@ public class Main {
                                     return set1;
                                 }
                         );
+
+        logs.saveAsTextFile(resultPath+"/result/tagsResult.txt");
 
         //Collecting all events per key:  (day,city,tag) -> eventInfo
         JavaPairRDD<DayCityTagKey, EventInfo> keyEvent =
@@ -143,9 +145,7 @@ public class Main {
                                 }
                         );
 
-        resultRdd.foreach(pair -> {
-            System.out.println(pair._1() + ":" + pair._2());
-        });
+        resultRdd.saveAsTextFile(resultPath+"/result/eventsResult.txt");
 
         //Collect all attenders
         JavaRDD<UserInfo> allAttenders = keyEvent.flatMap(pair -> {
@@ -164,7 +164,7 @@ public class Main {
                         .mapToPair(Tuple2::swap)
                         .sortByKey((i1, i2) -> -Integer.compare(i1, i2));
 
-        userResultRdd.foreach(occUser -> System.out.println(occUser._2() + ":" + occUser._1()));
+        userResultRdd.saveAsTextFile(resultPath+"/result/attenders.txt");
 
 
     }
